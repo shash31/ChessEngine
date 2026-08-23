@@ -83,8 +83,8 @@ Board::Board(std::string_view fen) {
             file++;
         }
     }
-    std::cout << "After parsing\n";
-    std::cout << grid << "\n";
+    // std::cout << "After parsing\n";
+    // std::cout << grid << "\n";
 
 }
 

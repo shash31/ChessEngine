@@ -9,20 +9,23 @@ body {
 }
 
 main {
-    padding: 0 35dvw;
+    padding: 15px 35dvw;
     outline: 1px solid black;
     border: 1px solid gray;
-    display: flex;
-    flex-direction: column;
+    /* display: flex;
+    flex-direction: column; */
 }
 
 #settings {
     margin: 20px;
+    padding: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
     font-size: 1.2rem;
+    /* width: 35dvw; */
+    /* border: 1px solid gray; */
 
     input {
         width: 35px;
@@ -33,7 +36,6 @@ main {
     #undo-button {
         margin: 20px;
         padding: 10px 20px;
-        align-self: center;
         font-size: 1.2rem;
         background-color: #4CAF50;
         color: white;
@@ -41,4 +43,35 @@ main {
         border-radius: 5px;
         cursor: pointer;
     }
+
+    #new-game-button {
+        margin: 20px;
+        padding: 10px 20px;
+        align-self: center;
+        font-size: 1.2rem;
+        background-color: #f44336;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    #engine-move-button {
+        margin: 20px;
+        padding: 10px 20px;
+        align-self: center;
+        font-size: 1.2rem;
+        background-color: #2196F3;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+}
+
+#status {
+    margin: 20px;
+    padding: 10px;
+    font-size: 1.2rem;
+    text-align: center;
 }
