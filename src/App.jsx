@@ -7,7 +7,7 @@ import './styles.css'
 // - Set up web workers eventually maybe
 
 function App() {
-  const chessGameRef = useRef(new Chess());
+  const chessGameRef = useRef(new Chess("6k1/5pp1/2p5/p4r2/P6P/8/4q3/7K b - - 0 46"));
   const chessGame = chessGameRef.current;
 
   const [chessPosition, setChessPosition] = useState(chessGame.fen());

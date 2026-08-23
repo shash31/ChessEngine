@@ -28,13 +28,12 @@ int quiescence(uint8_t ply,int alpha, int beta, Board& board) {
 
     std::vector<Move> moves = in_check ? board.generate_pseudo_legal_moves() : board.generate_pseudo_legal_moves(true); // Generate all moves if in check, otherwise only captures
 
-    if (in_check && moves.size() == 0) {
-        return -INF + ply; // Mate detected inside QS
-    }
+    uint8_t legal_moves_count = 0;
     
     for (const Move& move : moves) {
         board.make_move(move);
         if (!board.is_king_capturable()) {
+            legal_moves_count++;
             int score = -quiescence(ply + 1, -beta, -alpha, board);
             board.unmake_move(move);
 
@@ -44,6 +43,11 @@ int quiescence(uint8_t ply,int alpha, int beta, Board& board) {
             board.unmake_move(move);
         }
     }
+
+    if (in_check && legal_moves_count == 0) {
+        return -INF + ply; // Mate detected inside QS
+    }
+    
     return alpha;
 }
 
