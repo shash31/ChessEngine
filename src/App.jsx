@@ -17,7 +17,7 @@ function App() {
 
   useEffect(() => {
     createChessEngineModule({
-      locateFile: (path) => path.endsWith('.wasm') ? '/ChessEngine.wasm' : path
+      locateFile: (path) => path.endsWith('.wasm') ? `${import.meta.env.BASE_URL}ChessEngine.wasm` : path
     }).then((module) => {
       setEngine(module);
     });
