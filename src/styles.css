@@ -1,0 +1,44 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+    background-color: #b8b7b7;
+}
+
+main {
+    padding: 0 35dvw;
+    outline: 1px solid black;
+    border: 1px solid gray;
+    display: flex;
+    flex-direction: column;
+}
+
+#settings {
+    margin: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 1.2rem;
+
+    input {
+        width: 35px;
+        text-align: center;
+    }
+
+
+    #undo-button {
+        margin: 20px;
+        padding: 10px 20px;
+        align-self: center;
+        font-size: 1.2rem;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+}
