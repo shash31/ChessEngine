@@ -9,6 +9,7 @@
 // - Implement iterative deepening
 // - Maybe implement killer move heuristic
 // - Maybe implement history heuristic
+// - Look into improving search (PVS, NegaScout, etc.)
 // - Look into using NNUE as evaluation instead
 // - Look into multithreading with web workers
 

@@ -11,7 +11,7 @@ function App() {
   const chessGame = chessGameRef.current;
 
   const [chessPosition, setChessPosition] = useState(chessGame.fen());
-  const [depth, setDepth] = useState(4);
+  const [depth, setDepth] = useState(6);
 
   const [isSearching, setIsSearching] = useState(false);
   const workerRef = useRef(null);
@@ -102,19 +102,21 @@ function App() {
   }
 
   return (
-    <main>
-        <Chessboard options={chessBoardOptions}/>
-        <div id="settings">
-          <label>Depth: </label>
-          <input type="number" value={depth} min="1" onChange={(e) => setDepth(parseInt(e.target.value))} />
-          <button id="undo-button" onClick={undoMove}>Undo Move</button>
-          <button id="new-game-button" onClick={newGame}>New Game</button>
-          <button id="engine-move-button" onClick={() => triggerEngineMove(chessGame.fen(), depth)}>Engine Move</button>
-        </div>
-        <div id="status">
-          {isSearching ? "Engine is thinking..." : "Engine is idle."}
-        </div>
-    </main>
+    <>
+      <div id="board-container">
+          <Chessboard options={chessBoardOptions}/>
+      </div>
+      <div id="settings">
+        <label>Depth: </label>
+        <input type="number" value={depth} min="1" onChange={(e) => setDepth(parseInt(e.target.value))} />
+        <button id="undo-button" onClick={undoMove}>Undo Move</button>
+        <button id="new-game-button" onClick={newGame}>New Game</button>
+        <button id="engine-move-button" onClick={() => triggerEngineMove(chessGame.fen(), depth)}>Engine Move</button>
+      </div>
+      <div id="status">
+        {isSearching ? "Engine is thinking..." : "Engine is idle."}
+      </div>
+    </>
   )
 }
 
