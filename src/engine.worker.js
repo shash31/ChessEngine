@@ -19,7 +19,7 @@ self.onmessage = (event) => {
     // Running heavy C++ search on background thread
     const bestMove = engine.ccall(
       'get_best_move',
-      'string',
+      'number',
       ['string', 'number'],
       [fen, depth]
     );

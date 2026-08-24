@@ -7,7 +7,7 @@ import './styles.css'
 // - Set up web workers eventually maybe
 
 function App() {
-  const chessGameRef = useRef(new Chess("6k1/5pp1/2p5/p4r2/P6P/8/4q3/7K b - - 0 46"));
+  const chessGameRef = useRef(new Chess());
   const chessGame = chessGameRef.current;
 
   const [chessPosition, setChessPosition] = useState(chessGame.fen());
@@ -28,10 +28,18 @@ function App() {
       if (type === 'READY') {
         console.log('[Worker] Chess Engine Ready!');
       } else if (type === 'SEARCH_RESULT') {
+        const fromSq = bestMove & 0x3F;        // Bits 0-5
+        const toSq = (bestMove >> 6) & 0x3F;   // Bits 6-11
+        const flags = bestMove >> 12;          // Bits 12-15
+        const promotionPiece = (flags >= 8) ? ['n', 'b', 'r', 'q'][(flags - 8)%4] : null;
+
+        const fileChar = (sq) => String.fromCharCode('a'.charCodeAt(0) + (sq % 8));
+        const rankChar = (sq) => String((sq >> 3) + 1);
+
         chessGame.move({
-          from: bestMove.substring(0, 2),
-          to: bestMove.substring(2, 4),
-          promotion: 'q'
+          from: fileChar(fromSq) + rankChar(fromSq),
+          to: fileChar(toSq) + rankChar(toSq),
+          promotion: promotionPiece
         });
 
         setChessPosition(chessGame.fen());

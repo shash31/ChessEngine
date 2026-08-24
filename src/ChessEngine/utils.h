@@ -73,7 +73,7 @@ inline void printMove(Move move, std::array<Piece, 64>& grid) {
 }
 
 // ============================================================================
-// Other helper functions
+// Other helper functions & constants
 // ============================================================================
 
 std::ostream& operator<<(std::ostream& os, const std::array<Piece, 64>& grid);
@@ -84,7 +84,8 @@ void printBitboard(U64 board);
 // FEN string pieces to PieceType mapping
 PieceType char_to_piece(char p);
 
-uint8_t material(PieceType p);
+// uint8_t material(PieceType p);
+constexpr std::array<int, 6> material_values = {100, 320, 330, 500, 900, 20000}; // PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
  
 // ============================================================================
 // ATTACK TABLES (PAWN, KNIGHT, KING)

@@ -4,9 +4,11 @@
 #include "eval.h"
 
 // TODOs:
-// - Implement move ordering
+// - Put site link on resume and update and apply to jobs
 // - Implement transposition table
 // - Implement iterative deepening
+// - Maybe implement killer move heuristic
+// - Maybe implement history heuristic
 // - Look into using NNUE as evaluation instead
 // - Look into multithreading with web workers
 
@@ -14,7 +16,7 @@ constexpr int INF = 1e9;
 
 uint64_t total_nodes = 0;
 
-int quiescence(uint8_t ply,int alpha, int beta, Board& board) {
+int quiescence(int ply,int alpha, int beta, Board& board) {
     total_nodes++;
     
     Square king_pos = static_cast<Square>(std::countr_zero(board.piece_type_bb[board.turn][KING]));
@@ -26,11 +28,22 @@ int quiescence(uint8_t ply,int alpha, int beta, Board& board) {
         if (alpha < stand_pat) alpha = stand_pat;
     }
 
-    std::vector<Move> moves = in_check ? board.generate_pseudo_legal_moves() : board.generate_pseudo_legal_moves(true); // Generate all moves if in check, otherwise only captures
-
-    uint8_t legal_moves_count = 0;
+    MoveList move_list;
+    board.generate_pseudo_legal_moves(move_list, true); // Only captures
+    board.score_moves(move_list);
+    int legal_moves_count = 0;
     
-    for (const Move& move : moves) {
+    for (int i = 0; i < move_list.count; i++) {
+        // MVV-LVA ordering
+        int best_index = i;
+        for (int j = i + 1; j < move_list.count; j++) {
+            if (move_list.scores[j] > move_list.scores[best_index]) best_index = j;
+        }
+
+        std::swap(move_list[i], move_list[best_index]);
+        std::swap(move_list.scores[i], move_list.scores[best_index]);
+
+        Move move = move_list[i];
         board.make_move(move);
         if (!board.is_king_capturable()) {
             legal_moves_count++;
@@ -47,11 +60,11 @@ int quiescence(uint8_t ply,int alpha, int beta, Board& board) {
     if (in_check && legal_moves_count == 0) {
         return -INF + ply; // Mate detected inside QS
     }
-    
+
     return alpha;
 }
 
-int negamax(uint8_t depth, uint8_t ply, Board& board, int alpha, int beta) {
+int negamax(int depth, int ply, Board& board, int alpha, int beta) {
     total_nodes++;
 
     if (depth == 0) {
@@ -59,9 +72,21 @@ int negamax(uint8_t depth, uint8_t ply, Board& board, int alpha, int beta) {
     }
 
     int max = -INF;
-    std::vector<Move> moves = board.generate_pseudo_legal_moves();
-    uint8_t legal_moves_count = 0;
-    for (Move move : moves) {
+    MoveList move_list;
+    board.generate_pseudo_legal_moves(move_list);
+    board.score_moves(move_list);
+    int legal_moves_count = 0;
+    for (int i = 0; i < move_list.count; i++) {
+        // MVV-LVA ordering
+        int best_index = i;
+        for (int j = i + 1; j < move_list.count; j++) {
+            if (move_list.scores[j] > move_list.scores[best_index]) best_index = j;
+        }
+
+        std::swap(move_list[i], move_list[best_index]);
+        std::swap(move_list.scores[i], move_list.scores[best_index]);
+
+        Move move = move_list[i];
         board.make_move(move);
         if (!board.is_king_capturable()) {
             legal_moves_count++;
@@ -88,16 +113,26 @@ int negamax(uint8_t depth, uint8_t ply, Board& board, int alpha, int beta) {
     return max;
 }
 
-Move choose_negamax_move(uint8_t depth, Board& board) {
-    // uint64_t nodes = 0;
+Move choose_negamax_move(int depth, Board& board) {
     total_nodes++;
 
     int max = -INF;
-    std::vector<Move> moves = board.generate_pseudo_legal_moves();
+    MoveList move_list;
+    board.generate_pseudo_legal_moves(move_list);
+    board.score_moves(move_list);
     Move bestMove;
-    uint8_t ply = 0;
-    for (Move move : moves) {
-    // Move move = moves[0];
+    int ply = 0;
+    for (int i = 0; i < move_list.count; ++i) {
+        // MVV-LVA ordering
+        int best_index = i;
+        for (int j = i + 1; j < move_list.count; j++) {
+            if (move_list.scores[j] > move_list.scores[best_index]) best_index = j;
+        }
+
+        std::swap(move_list[i], move_list[best_index]);
+        std::swap(move_list.scores[i], move_list.scores[best_index]);
+
+        Move move = move_list[i];
         board.make_move(move);
         if (!board.is_king_capturable()) {
             // printMove(move);
@@ -123,7 +158,7 @@ static bool engine_initialized = init_tables();
 
 extern "C" {
     EMSCRIPTEN_KEEPALIVE
-    const char* get_best_move(const char* fen_str, int depth) {
+    Move get_best_move(const char* fen_str, int depth) {
         std::string_view fen{fen_str};
         // std::string_view initialfen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
         // std::string_view testfen = "7k/8/8/7p/7q/8/4K3/1q1r4 w - - 12 68";
@@ -132,15 +167,11 @@ extern "C" {
 
         Board board{fen};
         // Board board{testfen};
-        // Board board{initialfen};
-        // Board board2{testfen};
 
         auto start = std::chrono::high_resolution_clock::now();
         total_nodes = 0;
 
-        static std::string move_buffer;
-        move_buffer = moveToString(choose_negamax_move(depth, board));
-        // move_buffer = "e2e4";
+        Move bestmove = choose_negamax_move(depth, board);
 
         auto end = std::chrono::high_resolution_clock::now();
         double seconds = std::chrono::duration<double>(end - start).count();
@@ -151,11 +182,10 @@ extern "C" {
                 << " | Time: " << seconds << "s" 
                 << " | NPS: " << static_cast<uint64_t>(nps) << std::endl;
 
-        // std::println("QS Nodes searched: {}", qs_nodes);
-
         std::cout << std::endl;
 
-        return move_buffer.c_str();
+        // return 0;
+        return bestmove;
     }
 }
 
@@ -163,9 +193,10 @@ uint64_t perft(int depth, Board& board) { // For testing correctness of move gen
     if (depth == 0) return 1ULL;
 
     uint64_t nodes = 0;
-    std::vector<Move> move_list = board.generate_pseudo_legal_moves();
+    MoveList move_list;
+    board.generate_pseudo_legal_moves(move_list);
 
-    for (int i = 0; i < move_list.size(); ++i) {
+    for (int i = 0; i < move_list.count; ++i) {
         Move move = move_list[i];
 
         board.make_move(move);
@@ -183,9 +214,10 @@ uint64_t perft(int depth, Board& board) { // For testing correctness of move gen
 }
 
 void perft_divide(int depth, Board& board, uint64_t& total_nodes) {
-    std::vector<Move> move_list = board.generate_pseudo_legal_moves();
+    MoveList move_list;
+    board.generate_pseudo_legal_moves(move_list);
 
-    for (int i = 0; i < move_list.size(); ++i) {
+    for (int i = 0; i < move_list.count; ++i) {
         Move move = move_list[i];
 
         board.make_move(move);

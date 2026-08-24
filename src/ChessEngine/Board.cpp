@@ -112,50 +112,66 @@ bool Board::is_king_capturable() { // Move legality check
     return false;
 }
 
-std::vector<Move> Board::generate_pseudo_legal_moves(bool capturesOnly) {
-    std::vector<Move> quiet_moves;
-    std::vector<Move> captures;
-    
-    get_pawn_moves(quiet_moves, captures, capturesOnly);
-    get_piece_moves(quiet_moves, captures, KNIGHT, capturesOnly);
-    get_piece_moves(quiet_moves, captures, BISHOP, capturesOnly);
-    get_piece_moves(quiet_moves, captures, ROOK, capturesOnly);
-    get_piece_moves(quiet_moves, captures, QUEEN, capturesOnly);
-    get_piece_moves(quiet_moves, captures, KING, capturesOnly);
+void Board::generate_pseudo_legal_moves(MoveList& move_list, bool capturesOnly) {
+
+    get_pawn_moves(move_list, capturesOnly);
+    get_piece_moves(move_list, KNIGHT, capturesOnly);
+    get_piece_moves(move_list, BISHOP, capturesOnly);
+    get_piece_moves(move_list, ROOK, capturesOnly);
+    get_piece_moves(move_list, QUEEN, capturesOnly);
+    get_piece_moves(move_list, KING, capturesOnly);
 
     if (!capturesOnly) {
         // Castling
         if (turn == WHITE) {
             // O-O
             if (castling_rights & WHITE_OO) { // Castling rights check
-                if (check_castle(oo_castling_paths[WHITE], oo_castling_attack_checks[WHITE])) quiet_moves.push_back(makeMoveU16(E1, G1, K_CASTLE));
+                if (check_castle(oo_castling_paths[WHITE], oo_castling_attack_checks[WHITE])) move_list.push(makeMoveU16(E1, G1, K_CASTLE));
             }
 
             // O-O-O
             if (castling_rights & WHITE_OOO) { // Castling rights check
-                if (check_castle(ooo_castling_paths[WHITE], ooo_castling_attack_checks[WHITE])) quiet_moves.push_back(makeMoveU16(E1, C1, Q_CASTLE));
+                if (check_castle(ooo_castling_paths[WHITE], ooo_castling_attack_checks[WHITE])) move_list.push(makeMoveU16(E1, C1, Q_CASTLE));
             }
         } else {
             // Castling rights check
             // O-O
             if (castling_rights & BLACK_OO) { // Castling rights check
-                if (check_castle(oo_castling_paths[BLACK], oo_castling_attack_checks[BLACK])) quiet_moves.push_back(makeMoveU16(E8, G8, K_CASTLE));
+                if (check_castle(oo_castling_paths[BLACK], oo_castling_attack_checks[BLACK])) move_list.push(makeMoveU16(E8, G8, K_CASTLE));
             }
 
             // O-O-O
             if (castling_rights & BLACK_OOO) { // Castling rights check
-                if (check_castle(ooo_castling_paths[BLACK], ooo_castling_attack_checks[BLACK])) quiet_moves.push_back(makeMoveU16(E8, C8, Q_CASTLE));
+                if (check_castle(ooo_castling_paths[BLACK], ooo_castling_attack_checks[BLACK])) move_list.push(makeMoveU16(E8, C8, Q_CASTLE));
             }
         }
-    } else {
-        return captures;
     }
+}
 
-    std::vector<Move> moves = std::move(captures);
-    moves.reserve(moves.size()+quiet_moves.size());
-    moves.insert(moves.end(), std::make_move_iterator(quiet_moves.begin()), std::make_move_iterator(quiet_moves.end()));
+void Board::score_moves(MoveList &move_list) {
+    // Scoring moves for MVV-LVA ordering
+    for (size_t i = 0; i < move_list.size(); ++i) {
+        Move move = move_list[i];
 
-    return moves;
+        uint8_t flag = move >> 12;
+        PieceType moving_piece = char_to_piece(grid[move & 0x3F]);
+
+        move_list.scores[i] = 0;
+
+        if (flag & 0x4) { // Capture bit
+            PieceType captured_type = char_to_piece(grid[(move >> 6) & 0x3F]); 
+            move_list.scores[i] += (material_values[captured_type] * 100) - material_values[moving_piece];
+        }
+        if (flag >= 8) { // Promotions
+            if ((flag % 4) == 3) { // Queen promotions
+                move_list.scores[i] += 80000; // (material_values[QUEEN] - material_values[PAWN]) * 100;
+            } else if ((flag % 4) == 0) { // Knight underpromotions (on occassion useful for tactics)
+                move_list.scores[i] += 22000; // (material_values[KNIGHT] - material_values[PAWN]) * 100;
+            } else { // Bishop or rook underpromotions (Not good 99.9% of times)
+                move_list.scores[i] -= 500;
+            }
+        }
+    }
 }
 
 bool Board::check_castle(U64 occupancy_path, U64 relevant_squares) {
@@ -173,7 +189,7 @@ bool Board::check_castle(U64 occupancy_path, U64 relevant_squares) {
     }
 }
 
-void Board::get_piece_moves(std::vector<Move> &quiet_moves, std::vector<Move> &captures, PieceType piece, bool capturesOnly) {
+void Board::get_piece_moves(MoveList &move_list, PieceType piece, bool capturesOnly) {
     U64 pieces = piece_type_bb[turn][piece];
     while (pieces) {
         Square from = static_cast<Square>(std::countr_zero(pieces));
@@ -197,10 +213,10 @@ void Board::get_piece_moves(std::vector<Move> &quiet_moves, std::vector<Move> &c
             Square to = static_cast<Square>(std::countr_zero(attacks));
 
             if (!get_bit(occupancy[BOTH], to)) { // Empty square
-                quiet_moves.push_back(makeMoveU16(from, to, QUIET_MOVE));
+                move_list.push(makeMoveU16(from, to, QUIET_MOVE));
             } else {
                 if (get_bit(occupancy[oppSide], to)) { // Capture
-                    captures.push_back(makeMoveU16(from, to, CAPTURE));
+                    move_list.push(makeMoveU16(from, to, CAPTURE));
                 }
             }
 
@@ -211,14 +227,14 @@ void Board::get_piece_moves(std::vector<Move> &quiet_moves, std::vector<Move> &c
     }
 }
 
-void Board::get_pawn_moves(std::vector<Move> &moves, std::vector<Move> &capture_moves, bool capturesOnly) {
+void Board::get_pawn_moves(MoveList &move_list, bool capturesOnly) {
     // En passant check
     if (en_passant_sq != SQ_NONE) {
         U64 attackers = PAWN_ATTACKS[oppSide][en_passant_sq] & piece_type_bb[turn][PAWN];
 
         while (attackers) {
             Square from = static_cast<Square>(std::countr_zero(attackers));
-            capture_moves.push_back(makeMoveU16(from, en_passant_sq, EP_CAPTURE));
+            move_list.push(makeMoveU16(from, en_passant_sq, EP_CAPTURE));
             attackers &= (attackers - 1);
         }
     }
@@ -233,12 +249,12 @@ void Board::get_pawn_moves(std::vector<Move> &moves, std::vector<Move> &capture_
 
             if ((1ULL << to) & last_pawn_ranks[turn]) {
                 // Capture promotion
-                capture_moves.insert(capture_moves.begin(), makeMoveU16(from, to, Q_PROM_CAPTURE));
-                capture_moves.push_back(makeMoveU16(from, to, R_PROM_CAPTURE));
-                capture_moves.push_back(makeMoveU16(from, to, B_PROM_CAPTURE));
-                capture_moves.push_back(makeMoveU16(from, to, K_PROM_CAPTURE));
+                move_list.push(makeMoveU16(from, to, Q_PROM_CAPTURE));
+                move_list.push(makeMoveU16(from, to, R_PROM_CAPTURE));
+                move_list.push(makeMoveU16(from, to, B_PROM_CAPTURE));
+                move_list.push(makeMoveU16(from, to, K_PROM_CAPTURE));
             } else {
-                capture_moves.push_back(makeMoveU16(from, to, CAPTURE));
+                move_list.push(makeMoveU16(from, to, CAPTURE));
             }
 
             captures &= (captures - 1);
@@ -250,17 +266,17 @@ void Board::get_pawn_moves(std::vector<Move> &moves, std::vector<Move> &capture_
                 if (!get_bit(occupancy[BOTH], from+8)) {
                     // Check for promotion
                     if ((1ULL << (from + 8)) & last_pawn_ranks[turn]) {
-                        moves.insert(moves.begin(), makeMoveU16(from, from+8, Q_PROM));
-                        moves.push_back(makeMoveU16(from, from+8, R_PROM));
-                        moves.push_back(makeMoveU16(from, from+8, B_PROM));
-                        moves.push_back(makeMoveU16(from, from+8, K_PROM));
+                        move_list.push(makeMoveU16(from, from+8, Q_PROM));
+                        move_list.push(makeMoveU16(from, from+8, R_PROM));
+                        move_list.push(makeMoveU16(from, from+8, B_PROM));
+                        move_list.push(makeMoveU16(from, from+8, K_PROM));
                     } else {
-                        moves.push_back(makeMoveU16(from, from+8, QUIET_MOVE));
+                        move_list.push(makeMoveU16(from, from+8, QUIET_MOVE));
 
                         // Check double push
                         if ((1ULL << from) & starting_pawn_ranks[turn]) {
                             if (!get_bit(occupancy[BOTH], from+16)) {
-                                moves.push_back(makeMoveU16(from, from+16, DOUBLE_PAWN_PUSH));
+                                move_list.push(makeMoveU16(from, from+16, DOUBLE_PAWN_PUSH));
                             }
                         }
                     }
@@ -270,18 +286,18 @@ void Board::get_pawn_moves(std::vector<Move> &moves, std::vector<Move> &capture_
                 if (!get_bit(occupancy[BOTH], from-8)) {
                     // Check for promotion
                     if ((1ULL << (from - 8)) & last_pawn_ranks[turn]) {
-                        moves.insert(moves.begin(), makeMoveU16(from, from-8, Q_PROM));
-                        moves.push_back(makeMoveU16(from, from-8, R_PROM));
-                        moves.push_back(makeMoveU16(from, from-8, B_PROM));
-                        moves.push_back(makeMoveU16(from, from-8, K_PROM));
+                        move_list.push(makeMoveU16(from, from-8, Q_PROM));
+                        move_list.push(makeMoveU16(from, from-8, R_PROM));
+                        move_list.push(makeMoveU16(from, from-8, B_PROM));
+                        move_list.push(makeMoveU16(from, from-8, K_PROM));
                     } else {
-                        moves.push_back(makeMoveU16(from, from-8, QUIET_MOVE));
+                        move_list.push(makeMoveU16(from, from-8, QUIET_MOVE));
 
 
                         // Check double push
                         if ((1ULL << from) & starting_pawn_ranks[turn]) {
                             if (!get_bit(occupancy[BOTH], from-16)) {
-                                moves.push_back(makeMoveU16(from, from-16, DOUBLE_PAWN_PUSH));
+                                move_list.push(makeMoveU16(from, from-16, DOUBLE_PAWN_PUSH));
                             }
                         }
                     }

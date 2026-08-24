@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include "utils.h"
 
 struct StateHistory { // For things not shown by moves
@@ -7,6 +8,20 @@ struct StateHistory { // For things not shown by moves
     Square en_passant_sq{SQ_NONE};
     uint8_t halfmove_clock;
     Piece captured_piece;
+};
+
+struct MoveList {
+    std::array<Move, 256> moves;
+    std::array<int, 256> scores;
+    int count = 0;
+
+    void push(Move move) {
+        moves[count++] = move;
+    }
+
+    int size() const { return count; }
+    Move& operator[](int index) { return moves[index]; }
+    const Move& operator[](int index) const { return moves[index]; }
 };
 
 struct Board {
@@ -40,13 +55,15 @@ struct Board {
 
     bool is_king_capturable();
 
-    std::vector<Move> generate_pseudo_legal_moves(bool capturesOnly=false);
+    void generate_pseudo_legal_moves(MoveList &move_list, bool capturesOnly=false);
+
+    void score_moves(MoveList &move_list);
 
     bool check_castle(U64 occupancy_path, U64 relevant_squares);
 
-    void get_piece_moves(std::vector<Move> &moves, std::vector<Move> &captures, PieceType piece, bool capturesOnly);
+    void get_piece_moves(MoveList &move_list, PieceType piece, bool capturesOnly);
 
-    void get_pawn_moves(std::vector<Move> &moves, std::vector<Move> &captures, bool capturesOnly);
+    void get_pawn_moves(MoveList &move_list, bool capturesOnly);
 
     void make_move(Move move);
 

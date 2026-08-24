@@ -64,20 +64,20 @@ void printBitboard(U64 board) {
     std::cout << strm.str() << std::endl;
 }
 
-uint8_t material(PieceType p) {
-    switch (p) {
-        case PAWN:
-            return 1;
-        case KNIGHT:
-            return 3;
-        case BISHOP:
-            return 3;
-        case ROOK:
-            return 5;
-        case QUEEN:
-            return 9;
-    }
-}
+// uint8_t material(PieceType p) {
+//     switch (p) {
+//         case PAWN:
+//             return 1;
+//         case KNIGHT:
+//             return 3;
+//         case BISHOP:
+//             return 3;
+//         case ROOK:
+//             return 5;
+//         case QUEEN:
+//             return 9;
+//     }
+// }
 
 bool init_tables() {
     // init_psq_tables(); // Evaluation 
