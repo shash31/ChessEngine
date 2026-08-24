@@ -3,11 +3,25 @@
 #include <algorithm>
 #include "utils.h"
 
+// Lookup tables for Zobrist random numbers
+struct Zobrist {
+    // [PieceType][Color][Square] -> 6 * 2 * 64
+    uint64_t piece_keys[6][2][64];
+    uint64_t side_key;
+    uint64_t castle_keys[16]; // 4-bit bitmask for castling rights
+    uint64_t ep_keys[64];     // En passant target square (0-63, or unused if no EP)
+
+    void init();
+};
+
+inline Zobrist zobrist_keys;
+
 struct StateHistory { // For things not shown by moves
     uint8_t castling_rights{0xF}; // 4-bit mask for KQkq
     Square en_passant_sq{SQ_NONE};
     uint8_t halfmove_clock;
     Piece captured_piece;
+    uint64_t hash;
 };
 
 struct MoveList {
@@ -32,6 +46,8 @@ struct Board {
 
     // Mailbox array for O(1) piece lookup on a specific square
     std::array<Piece, 64> grid{};
+
+    uint64_t hash;
     
     Color turn{};
     Color oppSide{};
@@ -57,7 +73,7 @@ struct Board {
 
     void generate_pseudo_legal_moves(MoveList &move_list, bool capturesOnly=false);
 
-    void score_moves(MoveList &move_list);
+    void score_moves(MoveList &move_list, Move tt_move);
 
     bool check_castle(U64 occupancy_path, U64 relevant_squares);
 

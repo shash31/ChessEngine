@@ -79,12 +79,11 @@ void printBitboard(U64 board) {
 //     }
 // }
 
-bool init_tables() {
-    // init_psq_tables(); // Evaluation 
+void init_tables() {
     init_leaper_attack_tables();
     // init_magic_numbers();
     init_sliding_piece_attack_tables();
-    return true;
+    // return true;
 }
 
 constexpr void init_leaper_attack_tables() {

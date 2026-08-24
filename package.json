@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:wasm": "em++ src/ChessEngine/*.cpp -std=c++23 -O3 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORTED_FUNCTIONS=_get_best_move -s EXPORTED_RUNTIME_METHODS=ccall,cwrap -o src/ChessEngine.js && mv src/ChessEngine.wasm public/",
+    "build:wasm": "em++ src/ChessEngine/*.cpp -std=c++23 -O3 -s INITIAL_MEMORY=134217728 -s ALLOW_MEMORY_GROWTH=1 -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORTED_FUNCTIONS=_get_best_move -s EXPORTED_RUNTIME_METHODS=ccall,cwrap -o src/ChessEngine.js && mv src/ChessEngine.wasm public/",
     "predeploy": "npm run build:wasm && npm run build",
     "deploy": "gh-pages -d dist",
     "lint": "eslint .",

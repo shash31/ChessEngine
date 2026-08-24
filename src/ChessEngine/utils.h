@@ -91,7 +91,7 @@ constexpr std::array<int, 6> material_values = {100, 320, 330, 500, 900, 20000};
 // ATTACK TABLES (PAWN, KNIGHT, KING)
 // ============================================================================
 
-bool init_tables();
+void init_tables();
 constexpr void init_leaper_attack_tables();
 
 // Utility masks
@@ -114,7 +114,11 @@ constexpr const std::array<U64, 2> last_pawn_ranks = {
 constexpr uint8_t castling_update_mask[64] = {
     13, 15, 15, 15, 12, 15, 15, 14, // Rank 1: A1=1101 (loses W_OOO), E1=1100 (loses W_OO & W_OOO), H1=1110 (loses W_OO)
     15, 15, 15, 15, 15, 15, 15, 15,
-    // ... ranks 3-7 ...
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
     7,  15, 15, 15,  3, 15, 15, 11  // Rank 8: A8=0111, E8=0011, H8=1011
 };
 // On ANY move (from_sq -> to_sq), update with a single operation:

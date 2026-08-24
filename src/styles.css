@@ -21,7 +21,7 @@ body {
 
 @media (orientation: portrait) {
   #board-container {
-    margin: 13dvh 0 11dvh 0;
+    margin: 13dvh 0 10dvh 0;
     padding: 2dvh 3dvw;
   }
 }
@@ -54,7 +54,7 @@ body {
     input {
         margin-left: 0;
         padding: 0.3rem 0;
-        width: 2.3rem;
+        width: 3rem;
         font-size: 1.2rem;
         text-align: center;
     }

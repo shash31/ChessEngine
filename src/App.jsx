@@ -11,7 +11,7 @@ function App() {
   const chessGame = chessGameRef.current;
 
   const [chessPosition, setChessPosition] = useState(chessGame.fen());
-  const [depth, setDepth] = useState(6);
+  const [timeLimit, setTimeLimit] = useState(10);
 
   const [isSearching, setIsSearching] = useState(false);
   const workerRef = useRef(null);
@@ -51,14 +51,14 @@ function App() {
     return () => workerRef.current?.terminate();
   }, []);
 
-  const triggerEngineMove = (currentFen, searchDepth = depth) => {
+  const triggerEngineMove = () => {
     if (!workerRef.current || isSearching) return;
     
     setIsSearching(true);
     workerRef.current.postMessage({
       type: 'SEARCH',
-      fen: currentFen,
-      depth: searchDepth
+      fen: chessGame.fen(),
+      maxTime: timeLimit
     });
   };
 
@@ -78,7 +78,7 @@ function App() {
 
       setChessPosition(chessGame.fen());
 
-      triggerEngineMove(chessGame.fen(), depth);
+      triggerEngineMove();
 
       return true;
     } catch (error) {
@@ -107,11 +107,11 @@ function App() {
           <Chessboard options={chessBoardOptions}/>
       </div>
       <div id="settings">
-        <label>Depth: </label>
-        <input type="number" value={depth} min="1" onChange={(e) => setDepth(parseInt(e.target.value))} />
+        <label>Time Limit: </label>
+        <input type="number" value={timeLimit} min="1" onChange={(e) => setTimeLimit(parseInt(e.target.value))} />
         <button id="undo-button" onClick={undoMove}>Undo Move</button>
         <button id="new-game-button" onClick={newGame}>New Game</button>
-        <button id="engine-move-button" onClick={() => triggerEngineMove(chessGame.fen(), depth)}>Engine Move</button>
+        <button id="engine-move-button" onClick={() => triggerEngineMove()}>Engine Move</button>
       </div>
       <div id="status">
         {isSearching ? "Engine is thinking..." : "Engine is idle."}

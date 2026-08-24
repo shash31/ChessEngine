@@ -1,5 +1,21 @@
 #include "Board.h"
 
+void Zobrist::init() {
+    // Deterministic Mersenne Twister seed ensures identical hash values across runs
+    std::mt19937_64 rng(1070372); 
+
+    for (int p = 0; p < 6; ++p) {
+        for (int c = 0; c < 2; ++c) {
+            for (int sq = 0; sq < 64; ++sq) {
+                piece_keys[p][c][sq] = rng();
+            }
+        }
+    }
+    side_key = rng();
+    for (int i = 0; i < 16; ++i) castle_keys[i] = rng();
+    for (int i = 0; i < 64; ++i) ep_keys[i] = rng();
+}
+
 Board::Board(std::string_view fen) {
     // Dissecting FEN
 
@@ -20,6 +36,7 @@ Board::Board(std::string_view fen) {
     std::string_view turn_sv = next_token(remaining);
     turn = (!turn_sv.empty() && turn_sv[0] == 'w') ? WHITE : BLACK;
     oppSide = getOppositeColor(turn);
+    if (turn == BLACK) hash ^= zobrist_keys.side_key;
 
     // 3. Castling rights
     std::string_view cr = next_token(remaining);
@@ -34,11 +51,13 @@ Board::Board(std::string_view fen) {
             }
         }
     }
+    hash ^= zobrist_keys.castle_keys[castling_rights];
 
     // 4. En passant target square
     std::string_view ep = next_token(remaining);
     if (ep != "-" && !ep.empty()) {
         en_passant_sq = getSquareFromNotation(ep);
+        hash ^= zobrist_keys.ep_keys[en_passant_sq];
     }
 
     // 5. Halfmove clock
@@ -74,15 +93,21 @@ Board::Board(std::string_view fen) {
                 // black piece
                 occupancy[BLACK] |= occupied_bit; // Occupancy board
                 piece_type_bb[BLACK][type] |= occupied_bit; // Piece bitboard
+                hash ^= zobrist_keys.piece_keys[type][BLACK][sq]; // Zobrist hash
             } else {
                 // white piece
                 occupancy[WHITE] |= occupied_bit; // Occupancy board
                 piece_type_bb[WHITE][type] |= occupied_bit; // Piece bitboard
+                hash ^= zobrist_keys.piece_keys[type][WHITE][sq]; // Zobrist hash
             }
+
             grid[sq] = static_cast<Piece>(c);
+
             file++;
         }
     }
+
+
     // std::cout << "After parsing\n";
     // std::cout << grid << "\n";
 
@@ -148,10 +173,15 @@ void Board::generate_pseudo_legal_moves(MoveList& move_list, bool capturesOnly) 
     }
 }
 
-void Board::score_moves(MoveList &move_list) {
+void Board::score_moves(MoveList &move_list, Move tt_move) {
     // Scoring moves for MVV-LVA ordering
     for (size_t i = 0; i < move_list.size(); ++i) {
         Move move = move_list[i];
+
+        if (move == tt_move) {
+            move_list.scores[i] = 100000; // Highest score for TT move
+            continue;
+        }
 
         uint8_t flag = move >> 12;
         PieceType moving_piece = char_to_piece(grid[move & 0x3F]);
@@ -340,9 +370,14 @@ void Board::make_move(Move move) {
     U64 move_mask = (1ULL << from) | (1ULL << to);
     MoveFlag flag = static_cast<MoveFlag>(move >> 12);
 
-    history[ply_counter++] = {castling_rights, en_passant_sq, halfmove_clock, captured_piece};
 
+    history[ply_counter++] = {castling_rights, en_passant_sq, halfmove_clock, captured_piece, hash};
+
+    hash ^= zobrist_keys.castle_keys[castling_rights]; // Undoing castling rights in hash
     castling_rights &= castling_update_mask[from] & castling_update_mask[to]; // Updating castling rights
+    hash ^= zobrist_keys.castle_keys[castling_rights]; // Redoing new castling rights in hash
+    
+    if (en_passant_sq != SQ_NONE) hash ^= zobrist_keys.ep_keys[en_passant_sq]; // Undoing en passant square in hash
     en_passant_sq = SQ_NONE; // Always reset to SQ_NONE unless double pawn push
 
     captured_piece = grid[to];
@@ -352,8 +387,12 @@ void Board::make_move(Move move) {
 
     occupancy[turn] ^= move_mask;
 
-    if (flag < 8) {
+    // Hash updates
+    hash ^= zobrist_keys.piece_keys[piece][turn][from];
+    hash ^= zobrist_keys.piece_keys[piece][turn][to];
+    hash ^= zobrist_keys.side_key;
 
+    if (flag < 8) {
         // QUIET_MOVE
         occupancy[BOTH] ^= move_mask;
         piece_type_bb[turn][piece] ^= move_mask;
@@ -362,6 +401,7 @@ void Board::make_move(Move move) {
 
         if (flag == DOUBLE_PAWN_PUSH) {
             en_passant_sq = turn == WHITE ? static_cast<Square>(to - 8) : static_cast<Square>(to + 8);
+            hash ^= zobrist_keys.ep_keys[en_passant_sq];
         } else if ((flag == K_CASTLE) || (flag == Q_CASTLE)) {  // Castling
             Square rf, rt;
             if (turn == WHITE) {
@@ -383,14 +423,13 @@ void Board::make_move(Move move) {
             occupancy[turn] ^= rook_move;
             occupancy[BOTH] ^= rook_move;
             grid[rt] = grid[rf]; grid[rf] = NO_PIECE;
-
-            castling_rights &= turn == WHITE ? ~WHITE_CASTLE : ~BLACK_CASTLE; // Updating castling rights again
         } else if (flag > 3) { // Capture and En passant
             set_bit(occupancy[BOTH], to); // Because previous XOR relied on dest square being empty
 
             if (flag == CAPTURE) { // Regular capture
                 clear_bit(piece_type_bb[oppSide][captured], to);
                 clear_bit(occupancy[oppSide], to);
+                hash ^= zobrist_keys.piece_keys[captured][oppSide][to];
             } else { // En passant
                 if (turn == WHITE) {
                     clear_bit(piece_type_bb[oppSide][PAWN], to - 8);
@@ -398,18 +437,21 @@ void Board::make_move(Move move) {
                     clear_bit(occupancy[BOTH], to - 8);
                     captured_piece = grid[to - 8];
                     grid[to - 8] = NO_PIECE;
+                    hash ^= zobrist_keys.piece_keys[captured][oppSide][to - 8];
                 } else {
                     clear_bit(piece_type_bb[oppSide][PAWN], to + 8);
                     clear_bit(occupancy[oppSide], to + 8);
                     clear_bit(occupancy[BOTH], to + 8);
                     captured_piece = grid[to + 8];
                     grid[to + 8] = NO_PIECE;
+                    hash ^= zobrist_keys.piece_keys[captured][oppSide][to + 8];
                 }
             }
             
             halfmove_clock = 0;
         }
     } else { // Promotions and Capture promotions
+        hash ^= zobrist_keys.piece_keys[piece][turn][to]; // Undo moving original piece to destination square
         clear_bit(piece_type_bb[turn][piece], from);
         grid[from] = NO_PIECE;
         
@@ -420,19 +462,20 @@ void Board::make_move(Move move) {
             clear_bit(occupancy[BOTH], from);
             clear_bit(occupancy[oppSide], to);
             clear_bit(piece_type_bb[oppSide][captured], to);
+            hash ^= zobrist_keys.piece_keys[captured][oppSide][to];
         }
 
         if ((flag == Q_PROM) || (flag == Q_PROM_CAPTURE)) {
-            set_bit(piece_type_bb[turn][QUEEN], to);
+            set_bit(piece_type_bb[turn][QUEEN], to); hash ^= zobrist_keys.piece_keys[QUEEN][turn][to];
             grid[to] = turn == WHITE ? W_QUEEN : B_QUEEN;
         } else if ((flag == R_PROM) || (flag == R_PROM_CAPTURE)) {
-            set_bit(piece_type_bb[turn][ROOK], to);
+            set_bit(piece_type_bb[turn][ROOK], to); hash ^= zobrist_keys.piece_keys[ROOK][turn][to];
             grid[to] = turn == WHITE ? W_ROOK : B_ROOK;
         } else if ((flag == B_PROM) || (flag == B_PROM_CAPTURE)) {
-            set_bit(piece_type_bb[turn][BISHOP], to);
+            set_bit(piece_type_bb[turn][BISHOP], to); hash ^= zobrist_keys.piece_keys[BISHOP][turn][to];
             grid[to] = turn == WHITE ? W_BISHOP : B_BISHOP;
         } else if ((flag == K_PROM) || (flag == K_PROM_CAPTURE)) {
-            set_bit(piece_type_bb[turn][KNIGHT], to);
+            set_bit(piece_type_bb[turn][KNIGHT], to); hash ^= zobrist_keys.piece_keys[KNIGHT][turn][to];
             grid[to] = turn == WHITE ? W_KNIGHT: B_KNIGHT;
         }
     }
@@ -457,7 +500,6 @@ void Board::unmake_move(Move move) {
     occupancy[turn] ^= move_mask; // Will reverse move (if it was just made)
 
     if (flag < 8) {
-
         // QUIET_MOVE
         occupancy[BOTH] ^= move_mask;
         piece_type_bb[turn][piece] ^= move_mask;
@@ -525,13 +567,13 @@ void Board::unmake_move(Move move) {
         }
 
         if ((flag == Q_PROM) || (flag == Q_PROM_CAPTURE)) {
-            clear_bit(piece_type_bb[turn][QUEEN], to);
+            clear_bit(piece_type_bb[turn][QUEEN], to); hash ^= zobrist_keys.piece_keys[QUEEN][turn][to];
         } else if ((flag == R_PROM) || (flag == R_PROM_CAPTURE)) {
-            clear_bit(piece_type_bb[turn][ROOK], to);
+            clear_bit(piece_type_bb[turn][ROOK], to); hash ^= zobrist_keys.piece_keys[ROOK][turn][to];
         } else if ((flag == B_PROM) || (flag == B_PROM_CAPTURE)) {
-            clear_bit(piece_type_bb[turn][BISHOP], to);
+            clear_bit(piece_type_bb[turn][BISHOP], to); hash ^= zobrist_keys.piece_keys[BISHOP][turn][to];
         } else if ((flag == K_PROM) || (flag == K_PROM_CAPTURE)) {
-            clear_bit(piece_type_bb[turn][KNIGHT], to);
+            clear_bit(piece_type_bb[turn][KNIGHT], to); hash ^= zobrist_keys.piece_keys[KNIGHT][turn][to];
         }
     }
 
@@ -540,6 +582,7 @@ void Board::unmake_move(Move move) {
     en_passant_sq = history[ply_counter].en_passant_sq;
     halfmove_clock = history[ply_counter].halfmove_clock;
     captured_piece = history[ply_counter].captured_piece;
+    hash = history[ply_counter].hash;
 }
 
 // For testing and debugging
@@ -630,6 +673,10 @@ bool Board::operator==(const Board& other) const {
         std::cout << grid << "\n";
         std::cout << other.grid << "\n";
         std::println("Different grids");
+        return false;
+    }
+    if (hash != other.hash) {
+        std::println("Different hashes");
         return false;
     }
     if (castling_rights != other.castling_rights) {
